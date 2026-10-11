@@ -20,9 +20,10 @@ public:
   Rc<T> acquire(Args... constantArgs) {
     std::lock_guard lock(m_mutex);
 
-    if (!(m_useCount++))
+    if (!m_useCount)
       m_object = new T(constantArgs...);
 
+    ++m_useCount;
     return m_object;
   }
 
