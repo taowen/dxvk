@@ -14,7 +14,7 @@ namespace dxvk {
    * Provides a way to transparently create a
    * Vulkan surface for a given platform window.
    */
-  class DxgiSurfaceFactory : public ComObject<IDXGIVkSurfaceFactory> {
+  class DxgiSurfaceFactory : public ComObject<IDXGIVkSurfaceFactory1> {
 
   public:
 
@@ -32,6 +32,8 @@ namespace dxvk {
             VkInstance                Instance,
             VkPhysicalDevice          Adapter,
             VkSurfaceKHR*             pSurface);
+
+    BOOL STDMETHODCALLTYPE IsOffscreen();
 
   private:
 

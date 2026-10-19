@@ -66,6 +66,9 @@ namespace dxvk {
     m_desc(*pDesc),
     m_device(pDevice->GetDXVKDevice()),
     m_frameLatencyCap(pDevice->GetOptions()->maxFrameLatency) {
+    Com<IDXGIVkSurfaceFactory1> surfaceFactory;
+    if (SUCCEEDED(pSurfaceFactory->QueryInterface(IID_PPV_ARGS(&surfaceFactory))))
+      m_offscreen = surfaceFactory->IsOffscreen();
     CreateFrameLatencyEvent();
     CreatePresenter();
     CreateBackBuffers();
@@ -80,6 +83,9 @@ namespace dxvk {
       return;
 
     m_presenter->destroyResources();
+
+    if (m_offscreen)
+      m_frameLatencySignal->wait(m_frameId);
     
     DestroyFrameLatencyEvent();
     DestroyLatencyTracker();
@@ -261,7 +267,7 @@ namespace dxvk {
       if (hr != S_OK)
         return hr;
 
-      VkResult status = m_presenter->checkSwapChainStatus();
+      VkResult status = m_offscreen ? VK_SUCCESS : m_presenter->checkSwapChainStatus();
       return status == VK_SUCCESS ? S_OK : DXGI_STATUS_OCCLUDED;
     }
 
@@ -382,6 +388,23 @@ namespace dxvk {
     immediateContext->EndFrame(m_latency);
     immediateContext->ExecuteFlush(GpuFlushType::ExplicitFlush, nullptr, true);
 
+    if (m_offscreen) {
+      m_frameId += 1;
+      immediateContext->EmitCs([
+        cSignal = m_frameLatencySignal,
+        cFrameId = m_frameId
+      ] (DxvkContext* ctx) {
+        ctx->signal(cSignal, cFrameId);
+        ctx->flushCommandList(nullptr, nullptr);
+      });
+
+      if (m_backBuffers.size() > 1u)
+        RotateBackBuffers(immediateContext);
+
+      immediateContext->FlushCsChunk();
+      return S_OK;
+    }
+
     m_presenter->setSyncInterval(SyncInterval);
 
     // Presentation semaphores and WSI swap chain image
@@ -501,7 +524,7 @@ namespace dxvk {
 
   void D3D11SwapChain::CreatePresenter() {
     PresenterDesc presenterDesc = { };
-    presenterDesc.deferSurfaceCreation = m_parent->GetOptions()->deferSurfaceCreation;
+    presenterDesc.deferSurfaceCreation = m_offscreen || m_parent->GetOptions()->deferSurfaceCreation;
 
     m_presenter = new Presenter(m_device, m_frameLatencySignal, presenterDesc, [
       cAdapter  = m_device->adapter(),
@@ -515,6 +538,9 @@ namespace dxvk {
     m_presenter->setSurfaceFormat(GetSurfaceFormat(m_desc.Format));
     m_presenter->setSurfaceExtent({ m_desc.Width, m_desc.Height });
     m_presenter->setFrameRateLimit(m_targetFrameRate, GetActualFrameLatency());
+
+    if (m_offscreen)
+      return;
 
     m_latency = m_device->createLatencyTracker(m_presenter);
 

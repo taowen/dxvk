@@ -26,7 +26,8 @@ namespace dxvk {
     *ppvObject = nullptr;
 
     if (riid == __uuidof(IUnknown)
-     || riid == __uuidof(IDXGIVkSurfaceFactory)) {
+     || riid == __uuidof(IDXGIVkSurfaceFactory)
+     || riid == __uuidof(IDXGIVkSurfaceFactory1)) {
       *ppvObject = ref(this);
       return S_OK;
     }
@@ -45,6 +46,11 @@ namespace dxvk {
           VkPhysicalDevice          Adapter,
           VkSurfaceKHR*             pSurface) {
     return wsi::createSurface(m_window, m_vkGetInstanceProcAddr, Instance, pSurface);
+  }
+
+
+  BOOL STDMETHODCALLTYPE DxgiSurfaceFactory::IsOffscreen() {
+    return m_ownsWindow;
   }
 
 
