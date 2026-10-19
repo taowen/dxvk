@@ -84,8 +84,10 @@ namespace dxvk {
 
     m_presenter->destroyResources();
 
-    if (m_offscreen)
+    if (m_offscreen) {
+      m_frameLatencySignal->wait(m_frameId);
       m_device->waitForIdle();
+    }
     
     DestroyFrameLatencyEvent();
     DestroyLatencyTracker();
