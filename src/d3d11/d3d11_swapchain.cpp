@@ -3,7 +3,6 @@
 #include "d3d11_swapchain.h"
 
 #include "../dxvk/dxvk_latency_builtin.h"
-#include "../dxvk/dxvk_shader_spirv.h"
 
 #include "../util/util_win32_compat.h"
 
@@ -397,9 +396,46 @@ namespace dxvk {
     auto immediateContextLock = immediateContext->LockContext();
 
     immediateContext->EndFrame(m_latency);
+
+    bool incrementalPresent = UseIncrementalPresent(pPresentParameters);
+    bool sequential = m_desc.SwapEffect == DXGI_SWAP_EFFECT_SEQUENTIAL ||
+                      m_desc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+
+    if (incrementalPresent && !sequential) {
+      Logger::err("D3D11: Incremental present only supported with sequential present modes.");
+      return DXGI_ERROR_INVALID_CALL;
+    }
+
+    if (incrementalPresent) {
+      if (!m_reportedIncrementalPresent) {
+        Logger::info(str::format("DXGI incremental present: ",
+          pPresentParameters->DirtyRectsCount, " dirty rects, composition=", m_offscreen));
+        m_reportedIncrementalPresent = true;
+      }
+      CompositeIncrementalPresent(immediateContext, pPresentParameters);
+    } else {
+      m_compositionBuffer = nullptr;
+      m_compositionScroll = nullptr;
+    }
+
     immediateContext->ExecuteFlush(GpuFlushType::ExplicitFlush, nullptr, true);
 
     if (m_offscreen) {
+      // Foreign composition consumers read the presented back buffer rather
+      // than a WSI image. Preserve the complete frame there as well as in the
+      // next draw buffer populated by CompositeIncrementalPresent.
+      if (m_compositionBuffer) {
+        immediateContext->EmitCs([
+          cComposition = m_compositionBuffer,
+          cBackBuffer = GetCommonTexture(m_backBuffers.front().ptr())->GetImage()
+        ] (DxvkContext* ctx) {
+          VkImageSubresourceLayers subresource = {};
+          subresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+          subresource.layerCount = 1u;
+          ctx->copyImage(cBackBuffer, subresource, VkOffset3D(),
+            cComposition, subresource, VkOffset3D(), cComposition->mipLevelExtent(0u));
+        });
+      }
       m_frameId += 1;
       immediateContext->EmitCs([
         cSignal = m_frameLatencySignal,
@@ -435,27 +471,6 @@ namespace dxvk {
 
     if (status == VK_NOT_READY)
       return DXGI_STATUS_OCCLUDED;
-
-    // Incremental presentation is only supported with flip model presentation
-    // on native, not 100% sure about the exact validation here.
-    bool incrementalPresent = UseIncrementalPresent(pPresentParameters);
-
-    bool sequential = m_desc.SwapEffect == DXGI_SWAP_EFFECT_SEQUENTIAL ||
-                      m_desc.SwapEffect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-
-    if (incrementalPresent && !sequential) {
-      Logger::err("D3D11: Incremental present only supported with sequential present modes.");
-      return DXGI_ERROR_INVALID_CALL;
-    }
-
-    if (incrementalPresent) {
-      CompositeIncrementalPresent(immediateContext, pPresentParameters);
-    } else {
-      // Nuke incremental present image out of existence to
-      // save memory, also to pick the correct source image
-      m_compositionBuffer = nullptr;
-      m_compositionScroll = nullptr;
-    }
 
     m_frameId += 1;
 
@@ -1074,16 +1089,19 @@ namespace dxvk {
       { 0u, 0u, 0u, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1u, VK_IMAGE_VIEW_TYPE_2D, VK_ACCESS_SHADER_READ_BIT },
     }};
 
-    DxvkSpirvShaderCreateInfo vsInfo = { };
+    DxvkShaderCreateInfo vsInfo = { };
+    vsInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    vsInfo.outputMask = 1u;
     vsInfo.localPushData = DxvkPushDataBlock(0, sizeof(CompositionArgs), sizeof(uint32_t), 0u);
-    vsInfo.debugName = "DXGI_VS";
-    m_compositionVs = new DxvkSpirvShader(vsInfo, d3d11_composition_vert);
+    m_compositionVs = new DxvkShader(vsInfo, SpirvCodeBuffer(d3d11_composition_vert));
 
-    DxvkSpirvShaderCreateInfo fsInfo = { };
+    DxvkShaderCreateInfo fsInfo = { };
+    fsInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    fsInfo.inputMask = 1u;
+    fsInfo.outputMask = 1u;
     fsInfo.bindingCount = fsBindings.size();
     fsInfo.bindings = fsBindings.data();
-    fsInfo.debugName = "DXGI_FS";
-    m_compositionFs = new DxvkSpirvShader(fsInfo, d3d11_composition_frag);
+    m_compositionFs = new DxvkShader(fsInfo, SpirvCodeBuffer(d3d11_composition_frag));
   }
 
 

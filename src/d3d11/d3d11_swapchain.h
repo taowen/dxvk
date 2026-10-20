@@ -109,6 +109,7 @@ namespace dxvk {
     D3D11Device*              m_parent;
     Com<IDXGIVkSurfaceFactory> m_surfaceFactory;
     bool                      m_offscreen = false;
+    bool                      m_reportedIncrementalPresent = false;
 
     DXGI_SWAP_CHAIN_DESC1     m_desc;
 
