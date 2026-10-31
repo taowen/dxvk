@@ -8,6 +8,8 @@ namespace dxvk::vk {
       LoadLibraryW(L"vulkan-1.dll"), "vkGetInstanceProcAddr"));
 
   PFN_vkVoidFunction LibraryLoader::sym(const char* name) const {
+    if (!GetInstanceProcAddr)
+      throw DxvkError("Failed to load the Vulkan loader");
     return dxvk::vk::GetInstanceProcAddr(nullptr, name);
   }
   
@@ -32,10 +34,7 @@ namespace dxvk::vk {
   }
   
   
-  LibraryFn::LibraryFn() {
-    if (!GetInstanceProcAddr)
-      throw DxvkError("Failed to load the Vulkan loader");
-  }
+  LibraryFn::LibraryFn() { }
   LibraryFn::~LibraryFn() { }
   
   
