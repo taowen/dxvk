@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "d3d9_annotation.h"
 
 namespace dxvk {

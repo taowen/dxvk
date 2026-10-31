@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "d3d11_context_def.h"
 #include "d3d11_device.h"
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include "d3d9_caps.h"
 #include "d3d9_constant_set.h"
 #include "../dxso/dxso_common.h"

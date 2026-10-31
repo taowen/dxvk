@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "d3d9_adapter.h"
 
 #include "d3d9_interface.h"
