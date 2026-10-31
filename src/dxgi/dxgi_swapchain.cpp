@@ -256,7 +256,7 @@ namespace dxvk {
           UINT                      PresentFlags,
     const DXGI_PRESENT_PARAMETERS*  pPresentParameters) {
 
-    if (!IsWindow(m_window))
+    if (m_window && !IsWindow(m_window))
       return S_OK;
     
     if (SyncInterval > 4)
@@ -266,7 +266,7 @@ namespace dxvk {
     std::lock_guard<dxvk::mutex> lockBuf(m_lockBuffer);
 
     try {
-      HRESULT hr = m_presenter->Present(SyncInterval, PresentFlags, nullptr);
+      HRESULT hr = m_presenter->Present(SyncInterval, PresentFlags, pPresentParameters);
       if (hr == S_OK && !(PresentFlags & DXGI_PRESENT_TEST))
         m_presentCount++;
       return hr;
@@ -283,7 +283,7 @@ namespace dxvk {
           UINT        Height,
           DXGI_FORMAT NewFormat,
           UINT        SwapChainFlags) {
-    if (!IsWindow(m_window))
+    if (m_window ? !IsWindow(m_window) : (!Width || !Height || Width > INT32_MAX || Height > INT32_MAX))
       return DXGI_ERROR_INVALID_CALL;
 
     constexpr UINT PreserveFlags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
@@ -295,7 +295,7 @@ namespace dxvk {
     m_desc.Width  = Width;
     m_desc.Height = Height;
     
-    GetWindowClientSize(m_window,
+    if (m_window) GetWindowClientSize(m_window,
       m_desc.Width  ? nullptr : &m_desc.Width,
       m_desc.Height ? nullptr : &m_desc.Height);
     
@@ -390,7 +390,7 @@ namespace dxvk {
           IDXGIOutput*  pTarget) {
     std::lock_guard<dxvk::recursive_mutex> lock(m_lockWindow);
 
-    if (!Fullscreen && pTarget)
+    if (!m_window || (!Fullscreen && pTarget))
       return DXGI_ERROR_INVALID_CALL;
 
     if (m_descFs.Windowed && Fullscreen)

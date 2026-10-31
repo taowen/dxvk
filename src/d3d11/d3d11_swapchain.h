@@ -99,6 +99,8 @@ namespace dxvk {
     Rc<hud::Hud>              m_hud;
 
     Com<D3D11Texture2D, false> m_backBuffer;
+    Com<ID3D11Texture2D> m_compositionBuffer;
+    Com<ID3D11Texture2D> m_scrollBuffer;
     DxvkSubmitStatus          m_presentStatus;
 
     std::vector<Rc<DxvkImageView>> m_imageViews;
@@ -115,6 +117,8 @@ namespace dxvk {
     double                  m_displayRefreshRate = 0.0;
 
     HRESULT PresentImage(UINT SyncInterval);
+
+    HRESULT PresentComposition(UINT Flags, const DXGI_PRESENT_PARAMETERS* parameters);
 
     void SubmitPresent(
             D3D11ImmediateContext*  pContext,

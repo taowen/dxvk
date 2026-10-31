@@ -28,6 +28,8 @@ namespace dxvk {
 
   
   DxgiOptions::DxgiOptions(const Config& config) {
+    enableDummyCompositionSwapchain = config.getOption<bool>("dxgi.enableDummyCompositionSwapchain", false);
+
     // Fetch these as a string representing a hexadecimal number and parse it.
     this->customVendorId = parsePciId(config.getOption<std::string>("dxgi.customVendorId"));
     this->customDeviceId = parsePciId(config.getOption<std::string>("dxgi.customDeviceId"));

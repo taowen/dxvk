@@ -35,6 +35,9 @@ namespace dxvk {
 
     /// Enables nvapi workaround
     bool nvapiHack;
+
+    /// Same opt-in as modern DXVK; presentation is consumed by Wine DComp.
+    bool enableDummyCompositionSwapchain;
   };
   
 }

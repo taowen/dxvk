@@ -25,16 +25,27 @@ namespace dxvk {
     m_frameLatencyCap(pDevice->GetOptions()->maxFrameLatency) {
     CreateFrameLatencyEvent();
 
-    if (!pDevice->GetOptions()->deferSurfaceCreation)
+    if (m_window && !pDevice->GetOptions()->deferSurfaceCreation)
       CreatePresenter();
     
     CreateBackBuffer();
-    CreateBlitter();
-    CreateHud();
+    if (m_window) {
+      CreateBlitter();
+      CreateHud();
+    }
   }
 
 
   D3D11SwapChain::~D3D11SwapChain() {
+    if (!m_window) {
+      // A queued CS callback can submit after waitForIdle unless it is drained first.
+      Com<ID3D11DeviceContext> context;
+      m_parent->GetImmediateContext(&context);
+      auto immediate = static_cast<D3D11ImmediateContext*>(context.ptr());
+      immediate->FlushCsChunk();
+      immediate->SynchronizeCsThread(DxvkCsThread::SynchronizeAll);
+      m_frameLatencySignal->wait(m_frameId);
+    }
     m_device->waitForSubmission(&m_presentStatus);
     m_device->waitForIdle();
     
@@ -192,6 +203,9 @@ namespace dxvk {
           UINT                      SyncInterval,
           UINT                      PresentFlags,
     const DXGI_PRESENT_PARAMETERS*  pPresentParameters) {
+    if (!m_window)
+      return PresentComposition(PresentFlags, pPresentParameters);
+
     auto options = m_parent->GetOptions();
 
     if (options->syncInterval >= 0)
@@ -250,6 +264,86 @@ namespace dxvk {
 
     if (m_presenter != nullptr)
       m_presenter->setFrameRateLimiterRefreshRate(m_displayRefreshRate);
+  }
+
+
+  HRESULT D3D11SwapChain::PresentComposition(UINT Flags, const DXGI_PRESENT_PARAMETERS* parameters) {
+    if (m_device->getDeviceStatus() != VK_SUCCESS)
+      return DXGI_ERROR_DEVICE_RESET;
+    if (Flags & DXGI_PRESENT_TEST)
+      return S_OK;
+
+    const UINT dirtyCount = parameters ? parameters->DirtyRectsCount : 0;
+    const RECT* dirty = parameters ? parameters->pDirtyRects : nullptr;
+    const RECT* scroll = parameters ? parameters->pScrollRect : nullptr;
+    const POINT* offset = parameters ? parameters->pScrollOffset : nullptr;
+    auto valid = [this](const RECT& r) {
+      return r.left >= 0 && r.top >= 0 && r.right >= r.left && r.bottom >= r.top
+          && uint32_t(r.right) <= m_desc.Width && uint32_t(r.bottom) <= m_desc.Height;
+    };
+    if ((dirtyCount && !dirty) || bool(scroll) != bool(offset))
+      return DXGI_ERROR_INVALID_CALL;
+    for (UINT i = 0; i < dirtyCount; i++)
+      if (!valid(dirty[i])) return DXGI_ERROR_INVALID_CALL;
+    if (scroll && !valid(*scroll))
+      return DXGI_ERROR_INVALID_CALL;
+
+    Com<ID3D11DeviceContext> context;
+    m_parent->GetImmediateContext(&context);
+    auto immediate = static_cast<D3D11ImmediateContext*>(context.ptr());
+    auto lock = immediate->LockContext();
+    if (!m_compositionBuffer) {
+      D3D11_TEXTURE2D_DESC desc;
+      m_backBuffer->GetDesc(&desc);
+      desc.MiscFlags = 0;
+      HRESULT hr = m_parent->CreateTexture2D(&desc, nullptr, &m_compositionBuffer);
+      if (FAILED(hr)) return hr;
+      context->CopyResource(m_compositionBuffer.ptr(), m_backBuffer.ptr());
+    }
+    if (!dirtyCount && !scroll) {
+      context->CopyResource(m_compositionBuffer.ptr(), m_backBuffer.ptr());
+    } else {
+      // Retain the previous complete frame. Scrolling reads a separate snapshot
+      // because CopySubresourceRegion forbids overlapping source/destination.
+      if (scroll) {
+        if (!m_scrollBuffer) {
+          D3D11_TEXTURE2D_DESC desc;
+          m_compositionBuffer->GetDesc(&desc);
+          HRESULT hr = m_parent->CreateTexture2D(&desc, nullptr, &m_scrollBuffer);
+          if (FAILED(hr)) return hr;
+        }
+        context->CopyResource(m_scrollBuffer.ptr(), m_compositionBuffer.ptr());
+        int64_t dx = offset->x, dy = offset->y;
+        int64_t left = std::max<int64_t>(scroll->left, dx);
+        int64_t top = std::max<int64_t>(scroll->top, dy);
+        int64_t right = std::min<int64_t>(scroll->right, int64_t(m_desc.Width) + dx);
+        int64_t bottom = std::min<int64_t>(scroll->bottom, int64_t(m_desc.Height) + dy);
+        if (left < right && top < bottom) {
+          D3D11_BOX box = {UINT(left - dx), UINT(top - dy), 0, UINT(right - dx), UINT(bottom - dy), 1};
+          context->CopySubresourceRegion(m_compositionBuffer.ptr(), 0, UINT(left), UINT(top), 0,
+            m_scrollBuffer.ptr(), 0, &box);
+        }
+      }
+      for (UINT i = 0; i < dirtyCount; i++) {
+        const RECT& r = dirty[i];
+        if (r.left == r.right || r.top == r.bottom) continue;
+        D3D11_BOX box = {UINT(r.left), UINT(r.top), 0, UINT(r.right), UINT(r.bottom), 1};
+        context->CopySubresourceRegion(m_compositionBuffer.ptr(), 0, r.left, r.top, 0,
+          m_backBuffer.ptr(), 0, &box);
+      }
+      // Wine DComp reads buffer zero. Expose a complete frame, not just the
+      // latest dirty rectangles, using the same policy as modern DXVK.
+      context->CopyResource(m_backBuffer.ptr(), m_compositionBuffer.ptr());
+    }
+    immediate->Flush();
+    const uint64_t frameId = ++m_frameId;
+    immediate->EmitCs([signal = m_frameLatencySignal, frameId](DxvkContext* ctx) {
+      ctx->signal(signal, frameId);
+      ctx->flushCommandList();
+    });
+    immediate->FlushCsChunk();
+    SyncFrameLatency();
+    return S_OK;
   }
 
 
@@ -453,6 +547,8 @@ namespace dxvk {
   void D3D11SwapChain::CreateBackBuffer() {
     // Explicitly destroy current swap image before
     // creating a new one to free up resources
+    m_compositionBuffer = nullptr;
+    m_scrollBuffer = nullptr;
     m_swapImage         = nullptr;
     m_swapImageView     = nullptr;
     m_backBuffer        = nullptr;

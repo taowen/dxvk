@@ -126,6 +126,15 @@ namespace dxvk {
     if (!ppSwapChain || !pDesc || !hWnd || !pDevice)
       return DXGI_ERROR_INVALID_CALL;
     
+    return CreateSwapChainBase(pDevice, hWnd, pDesc, pFullscreenDesc, pRestrictToOutput, ppSwapChain);
+  }
+
+
+  HRESULT DxgiFactory::CreateSwapChainBase(
+          IUnknown* pDevice, HWND hWnd,
+    const DXGI_SWAP_CHAIN_DESC1* pDesc,
+    const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
+          IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain) {
     Com<IWineDXGISwapChainFactory> wineDevice;
     
     if (SUCCEEDED(pDevice->QueryInterface(
@@ -170,8 +179,17 @@ namespace dxvk {
           IDXGISwapChain1**     ppSwapChain) {
     InitReturnPtr(ppSwapChain);
     
-    Logger::err("DxgiFactory::CreateSwapChainForComposition: Not implemented");
-    return E_NOTIMPL;
+    if (!ppSwapChain || !pDevice || !pDesc || !pDesc->Width || !pDesc->Height
+     || pDesc->Width > INT32_MAX || pDesc->Height > INT32_MAX
+     || pDesc->SwapEffect != DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
+     || pDesc->SampleDesc.Count != 1 || pDesc->SampleDesc.Quality
+     || pDesc->BufferCount < 2 || pDesc->BufferCount > DXGI_MAX_SWAP_CHAIN_BUFFERS)
+      return DXGI_ERROR_INVALID_CALL;
+    if (!m_options.enableDummyCompositionSwapchain)
+      return DXGI_ERROR_UNSUPPORTED;
+
+    // Composition has no HWND and never creates a Vulkan window-system swapchain.
+    return CreateSwapChainBase(pDevice, nullptr, pDesc, nullptr, pRestrictToOutput, ppSwapChain);
   }
   
   

@@ -3066,13 +3066,13 @@ namespace dxvk {
           IDXGISwapChain1**       ppSwapChain) {
     InitReturnPtr(ppSwapChain);
     
-    if (!ppSwapChain || !pDesc || !hWnd)
+    if (!ppSwapChain || !pDesc || (!hWnd && (!pDesc->Width || !pDesc->Height)))
       return DXGI_ERROR_INVALID_CALL;
     
     // Make sure the back buffer size is not zero
     DXGI_SWAP_CHAIN_DESC1 desc = *pDesc;
     
-    GetWindowClientSize(hWnd,
+    if (hWnd) GetWindowClientSize(hWnd,
       desc.Width  ? nullptr : &desc.Width,
       desc.Height ? nullptr : &desc.Height);
     

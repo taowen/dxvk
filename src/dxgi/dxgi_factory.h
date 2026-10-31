@@ -144,7 +144,13 @@ namespace dxvk {
     }
     
   private:
-    
+
+    HRESULT CreateSwapChainBase(
+            IUnknown* pDevice, HWND hWnd,
+      const DXGI_SWAP_CHAIN_DESC1* pDesc,
+      const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
+            IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain);
+
     Rc<DxvkInstance> m_instance;
     DxgiMonitorInfo  m_monitorInfo;
     DxgiOptions      m_options;
