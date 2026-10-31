@@ -292,7 +292,7 @@ namespace dxvk {
     m_parent->GetImmediateContext(&context);
     auto immediate = static_cast<D3D11ImmediateContext*>(context.ptr());
     auto lock = immediate->LockContext();
-    if (!m_compositionBuffer) {
+    if (m_compositionBuffer == nullptr) {
       D3D11_TEXTURE2D_DESC desc;
       m_backBuffer->GetDesc(&desc);
       desc.MiscFlags = 0;
@@ -306,7 +306,7 @@ namespace dxvk {
       // Retain the previous complete frame. Scrolling reads a separate snapshot
       // because CopySubresourceRegion forbids overlapping source/destination.
       if (scroll) {
-        if (!m_scrollBuffer) {
+        if (m_scrollBuffer == nullptr) {
           D3D11_TEXTURE2D_DESC desc;
           m_compositionBuffer->GetDesc(&desc);
           HRESULT hr = m_parent->CreateTexture2D(&desc, nullptr, &m_scrollBuffer);
