@@ -1,4 +1,5 @@
 #include "vulkan_loader.h"
+#include "../util/util_error.h"
 
 namespace dxvk::vk {
 
@@ -31,7 +32,10 @@ namespace dxvk::vk {
   }
   
   
-  LibraryFn::LibraryFn() { }
+  LibraryFn::LibraryFn() {
+    if (!GetInstanceProcAddr)
+      throw DxvkError("Failed to load the Vulkan loader");
+  }
   LibraryFn::~LibraryFn() { }
   
   
