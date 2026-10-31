@@ -56,7 +56,7 @@ add_project_link_arguments(cc.get_supported_link_arguments(link_args), language:
 
 dxvk_include_path = include_directories('./include')
 
-if (cpu_family == 'x86_64')
+if cpu_family != 'x86'
   dxvk_library_path = meson.source_root() + '/lib'
 else
   dxvk_library_path = meson.source_root() + '/lib32'
@@ -64,11 +64,10 @@ endif
 
 dxvk_extradep = [ ]
 
-lib_vulkan  = cpp.find_library('vulkan-1', dirs : dxvk_library_path)
 lib_d3d9    = cpp.find_library('d3d9')
 lib_d3d11   = cpp.find_library('d3d11')
 lib_dxgi    = cpp.find_library('dxgi')
-lib_d3dcompiler_43 = cpp.find_library('d3dcompiler_43', dirs : dxvk_library_path)
+lib_d3dcompiler_43 = cpp.find_library('d3dcompiler_43', dirs : cpu_family == 'aarch64' ? [] : [dxvk_library_path])
 
 if dxvk_is_msvc
   lib_d3dcompiler_47 = cpp.find_library('d3dcompiler')

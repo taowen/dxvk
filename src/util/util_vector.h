@@ -151,10 +151,15 @@ namespace dxvk {
 
   inline Vector4 replaceNaN(Vector4 a) {
     Vector4 result;
+    #ifdef DXVK_ARCH_ARM64
+    for (uint32_t i = 0; i < 4; ++i)
+      result[i] = std::isnan(a[i]) ? 0.0f : a[i];
+    #else
     __m128 value = _mm_load_ps(a.data);
     __m128 mask  = _mm_cmpeq_ps(value, value);
            value = _mm_and_ps(value, mask);
     _mm_store_ps(result.data, value);
+    #endif
     return result;
   }
 

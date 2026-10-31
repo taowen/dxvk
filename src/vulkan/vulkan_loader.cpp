@@ -2,7 +2,9 @@
 
 namespace dxvk::vk {
 
-  static const PFN_vkGetInstanceProcAddr GetInstanceProcAddr = vkGetInstanceProcAddr;
+  static const PFN_vkGetInstanceProcAddr GetInstanceProcAddr =
+    reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(
+      LoadLibraryW(L"vulkan-1.dll"), "vkGetInstanceProcAddr"));
 
   PFN_vkVoidFunction LibraryLoader::sym(const char* name) const {
     return dxvk::vk::GetInstanceProcAddr(nullptr, name);
