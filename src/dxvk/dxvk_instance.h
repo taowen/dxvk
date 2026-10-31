@@ -3,13 +3,14 @@
 #include "../util/config/config.h"
 
 #include "dxvk_adapter.h"
+#include "dxvk_device_requirements.h"
 #include "dxvk_device_filter.h"
 #include "dxvk_extension_provider.h"
 #include "dxvk_options.h"
 
 namespace dxvk {
 
-  constexpr uint32_t DxvkVulkanApiVersion = VK_API_VERSION_1_3;
+  constexpr uint32_t DxvkVulkanApiVersion = DxvkRequiredVulkanApiVersion;
 
   /**
    * \brief Vulkan instance creation parameters
