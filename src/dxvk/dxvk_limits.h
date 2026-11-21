@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dxvk_include.h"
+#include "dxvk_device_requirements.h"
 
 namespace dxvk {
   
@@ -19,7 +20,7 @@ namespace dxvk {
     MaxNumSpecConstants         =    12,
     MaxUniformBufferSize        = 65536,
     MaxVertexBindingStride      =  2048,
-    MaxTotalPushDataSize        =   256,
+    MaxTotalPushDataSize        = DxvkRequiredPushConstantSize,
     MaxSharedPushDataSize       =    64,
     MaxPerStagePushDataSize     =    32,
     MaxReservedPushDataSize     =    32,
