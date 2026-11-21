@@ -68,7 +68,7 @@ namespace dxvk {
 
   private:
 
-    D3D9GDIDesc m_dcDesc;
+    D3D9GDIDesc m_dcDesc = { };
 
   };
 }
