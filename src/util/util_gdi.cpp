@@ -17,6 +17,7 @@ namespace dxvk {
     return proc ? proc args : static_cast<NTSTATUS>(0xc0000002); \
   }
 
+  DXVK_D3DKMT_PROC(D3DKMTAcquireKeyedMutex, (D3DKMT_ACQUIREKEYEDMUTEX *desc), (desc))
   DXVK_D3DKMT_PROC(D3DKMTCloseAdapter, (const D3DKMT_CLOSEADAPTER *desc), (desc))
   DXVK_D3DKMT_PROC(D3DKMTCreateDCFromMemory, (D3DKMT_CREATEDCFROMMEMORY *desc), (desc))
   DXVK_D3DKMT_PROC(D3DKMTCreateDevice, (D3DKMT_CREATEDEVICE *desc), (desc))
@@ -35,6 +36,7 @@ namespace dxvk {
   DXVK_D3DKMT_PROC(D3DKMTOpenSyncObjectFromNtHandle, (D3DKMT_OPENSYNCOBJECTFROMNTHANDLE *desc), (desc))
   DXVK_D3DKMT_PROC(D3DKMTQueryResourceInfo, (D3DKMT_QUERYRESOURCEINFO *desc), (desc))
   DXVK_D3DKMT_PROC(D3DKMTQueryResourceInfoFromNtHandle, (D3DKMT_QUERYRESOURCEINFOFROMNTHANDLE *desc), (desc))
+  DXVK_D3DKMT_PROC(D3DKMTReleaseKeyedMutex, (D3DKMT_RELEASEKEYEDMUTEX *desc), (desc))
   DXVK_D3DKMT_PROC(D3DKMTShareObjects, (UINT count, const D3DKMT_HANDLE *handles, OBJECT_ATTRIBUTES *attr, UINT access, HANDLE *handle), (count, handles, attr, access, handle))
 
 #undef DXVK_D3DKMT_PROC
@@ -142,32 +144,6 @@ namespace dxvk {
   NTSTATUS WINAPI D3DKMTShareObjects(UINT count, const D3DKMT_HANDLE *handles, OBJECT_ATTRIBUTES *attr, UINT access, HANDLE *handle) {
     Logger::warn("D3DKMTShareObjects: Not available on this platform.");
     return -1;
-  }
-#else
-  static NTSTATUS WINAPI NoD3DKMTAcquireKeyedMutex(D3DKMT_ACQUIREKEYEDMUTEX *desc) {
-    return -1;
-  }
-
-  NTSTATUS WINAPI D3DKMTAcquireKeyedMutex(D3DKMT_ACQUIREKEYEDMUTEX *desc) {
-    static decltype(D3DKMTAcquireKeyedMutex) *func;
-    if (!func) {
-      InterlockedCompareExchangePointer((void **)&func, (void *)GetProcAddress(GetModuleHandle("gdi32"), "D3DKMTAcquireKeyedMutex"), NULL);
-      InterlockedCompareExchangePointer((void **)&func, (void *)NoD3DKMTAcquireKeyedMutex, NULL);
-    }
-    return func(desc);
-  }
-
-  static NTSTATUS WINAPI NoD3DKMTReleaseKeyedMutex(D3DKMT_RELEASEKEYEDMUTEX *desc) {
-    return -1;
-  }
-
-  NTSTATUS WINAPI D3DKMTReleaseKeyedMutex(D3DKMT_RELEASEKEYEDMUTEX *desc) {
-    static decltype(D3DKMTReleaseKeyedMutex) *func;
-    if (!func) {
-      InterlockedCompareExchangePointer((void **)&func, (void *)GetProcAddress(GetModuleHandle("gdi32"), "D3DKMTReleaseKeyedMutex"), NULL);
-      InterlockedCompareExchangePointer((void **)&func, (void *)NoD3DKMTReleaseKeyedMutex, NULL);
-    }
-    return func(desc);
   }
 #endif
 }
